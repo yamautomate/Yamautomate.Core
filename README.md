@@ -26,12 +26,8 @@ Yamautomate.Core provides a comprehensive set of functions for managing various 
 | `New-YcSelfSignedCertForAppReg`  | Creates a self-signed certificate for application registration with a specified subject and validity period. Exports both `.pfx` and `.cer` files and returns the certificate's details. |
 | `New-YcRandomPassword`           | Generates a random password of a specified length, defaulting to 32 characters, using a character set that includes uppercase and lowercase letters, digits, and special characters. |
 | `Import-YcCertToLocalMachine`    | Imports a `.pfx` certificate into the Local Machine store using a secure password. Outputs a success message upon completion. |
-| `Submit-YcFileForAzAiDiAnalysis` | Submits a file or URL for analysis by Azure AI Form Recognizer, converts it into an appropriate format, and sends a POST request to the API. Returns relevant information or error details. |
-| `Read-YcAzAiDiStringResponse`    | Processes a raw Azure API response into a consolidated object, extracting key information such as HTTP status, operation location, request ID, and content type. |
-| `Get-YcPatternFromAzAiDiAnalysis`| Retrieves text content from an Azure AI Form Recognizer analysis and searches it for specified patterns. Returns an array of matched patterns. |
 | `Send-YcMgEmail`                 | Uses Microsoft Graph to send an email with specified content, subject, sender, and recipient addresses. |
 | `New-YcMgMailMessageBody`        | Constructs an email message body dictionary for Microsoft Graph, including the subject, content type, content, and recipient details. |
-| `Get-YcOpenAiResponse`           | Retrieves a response from the OpenAI API based on a specified query, with options for model, stop token, temperature, token limits, and response display preferences. |
 
 # Yamautomate.AI
 | Function                         | Description                                                                                                                    |
