@@ -1,0 +1,37 @@
+﻿{
+    "EventLogging":  [
+        {
+            "LogEvents":  "true",
+            "NameOfEventSource":  "ProductionPaperMover",
+            "PathToLogFile": "C:\\ScheduledTasks\\ProductionPaperMover\\"
+        }
+    ],
+
+    "AzureGeneral":  [
+        {
+            "tenantId":  "cb851853-ffbe-41dc-9161-b36f39759425",
+            "AzureAppRegistrationClientId":  "cbd19a3e-1699-4823-bd4b-365535d9fca3",
+            "AzureAppRegistrationClientSecretCredentialName":  "AzureAppRegistration_cbd19a3e-1699-4823-bd4b-365535d9fca3"
+        }
+    ],
+
+    "AzureDocumentIntelligenceService":  [
+        {
+            "EndpointURL":  "https://productionpaperocr.cognitiveservices.azure.com",
+            "APIKeyCredentialName":  "AzureDocumentIntelligenceService_APIKey"
+        }
+    ],
+
+    "ProductionPaperMoverConfig":  [
+        {
+            "DirectoryToProcess":  "\\\\buran.ad.speedgoat.ch\\shares\\production\\ProductionPaperToProcees",
+            "MoveProcessedFilesInto":  "\\\\buran.ad.speedgoat.ch\\shares\\production\\Production test report"
+        }
+    ],
+    "Notifications":  [
+        {
+            "SendReportEmailTo":  "yanik.maurer@speedgoat.ch",
+            "SendReportEmailFrom": "notifications.papermover@speedgoat.ch"
+        }
+    ]
+}
