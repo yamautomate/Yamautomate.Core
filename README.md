@@ -33,3 +33,12 @@ Yamautomate.Core provides a comprehensive set of functions for managing various 
 | `New-YcMgMailMessageBody`        | Constructs an email message body dictionary for Microsoft Graph, including the subject, content type, content, and recipient details. |
 | `Get-YcOpenAiResponse`           | Retrieves a response from the OpenAI API based on a specified query, with options for model, stop token, temperature, token limits, and response display preferences. |
 
+# Yamautomate.AI
+| Function                         | Description                                                                                                                    |
+|----------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
+
+| `Submit-YcFileForAzAiDiAnalysis` | Submits a file or URL for analysis by Azure AI Form Recognizer, converts it into an appropriate format, and sends a POST request to the API. Returns relevant information or error details. |
+| `Read-YcAzAiDiStringResponse`    | Processes a raw Azure API response into a consolidated object, extracting key information such as HTTP status, operation location, request ID, and content type. |
+| `Get-YcPatternFromAzAiDiAnalysis`| Retrieves text content from an Azure AI Form Recognizer analysis and searches it for specified patterns. Returns an array of matched patterns. |
+recipient details. |
+| `Get-YcOpenAiResponse`           | Retrieves a response from the OpenAI API based on a specified query, with options for model, stop token, temperature, token limits, and response display preferences. |
