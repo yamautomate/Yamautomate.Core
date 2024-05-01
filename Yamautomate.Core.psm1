@@ -8,16 +8,8 @@ function Get-YcRequiredModules {
 
     if (-not $moduleInstalled) 
     {
-        Write-Host "The required module '$moduleName' is not installed. Trying to install it." -ForegroundColor Yellow
-
-        try {
-            Install-Module -Name $moduleName -Force -Scope CurrentUser
-        } 
-        
-        catch {
-            Write-Error "Could not install module '$moduleName' due to error: $_"
-            return
-        }
+        Write-Host "The required module '$moduleName' is not installed. Please install it." -ForegroundColor Yellow
+        return 
     }
 
     # Check if the module is imported
@@ -101,7 +93,7 @@ function New-YcSecret {
         [Parameter(Mandatory=$false)] [ValidateSet("User", "System-Wide")] [string]$scope = "User"
     )
 
-    Get-RequiredModules -moduleName "CredentialManager"
+    Get-YcRequiredModules -moduleName "CredentialManager"
 
     switch ($SecretLocation) {
         WindowsCredentialStore 
@@ -171,7 +163,7 @@ function Get-YcSecret {
         [Parameter(Mandatory=$false)] [bool]$SupressErrors = $false
     )
 
-    Get-RequiredModules -moduleName "CredentialManager"
+    Get-YcRequiredModules -moduleName "CredentialManager"
 
     switch ($SecretLocation) {
         WindowsCredentialStore 
@@ -221,7 +213,7 @@ function Get-YcSecret {
         }
         AzureKeyVault
         {
-            Get-RequiredModules -moduleName "Az"
+            Get-YcRequiredModules -moduleName "Az"
 
             Get-YcSecret -WindowsCredentialStore -secretName $AzKeyVaultClientId
             Connect-AzAccount -ServicePrincipal -ApplicationId $AzKeyVaultClientId -TenantId $AzKeyVaultTenantId -Credential (New-Object -TypeName PSCredential -ArgumentList $clientId, $clientSecret)
@@ -387,7 +379,7 @@ function Get-YcOpenAiResponse {
         [Parameter(Mandatory=$false)] [string]$Character = "Chat"
     )
 
-    Get-RequiredModules -moduleName ShellGPT
+    Get-YcRequiredModules -moduleName ShellGPT
 
     $APIKey = Get-YCOpenAIAPIKey -KeyLocation WindowsCredentialStore -Name "OpenAI"
 
@@ -619,7 +611,7 @@ Function Send-YcMgEmail{
         [Parameter(Mandatory=$true)] [string]$to
     )
 
-    Get-RequiredModules -moduleName "Microsoft.Graph"
+    Get-YcRequiredModules -moduleName "Microsoft.Graph"
 
     $messageBody = New-YcMgMailMessageBody -message $message -subject $subject -to $to 
 
@@ -628,8 +620,6 @@ Function Send-YcMgEmail{
     Disconnect-MgGraph
 
     $clientSecret = $null
-
-
 }
 function New-YcMgMailMessageBody {
     param (
