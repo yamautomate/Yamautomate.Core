@@ -4,7 +4,7 @@
     Author = 'Yanik Maurer'
     PowerShellVersion = '5.1'
     RootModule = 'Yamautomate.Core.psm1'
-    FunctionsToExport = @('Get-YcRequiredModules', 'Initialize-YcEventLogging', 'YcLog-Event', 'New-YcSecret', 'Get-YcSecret', 'Get-YcJsonConfig', 'Write-YcLogFile', 'New-YcSampleConfig', 'Convert-YcSecureStringToPlainText', 'Get-YcOpenAiAPIKey', 'Get-YcOpenAiResponse', 'Read-YcAzAiDiStringResponse', 'Submit-YcFileForAzAiDiAnalysis', 'Get-YcPatternFromAzAiDiAnalysis', 'Send-YcMgEmail', 'New-YcMgMailMessageBody', 'New-YcSelfSignedCertForAppReg', 'New-YcRandomPassword', 'Import-YcCertToLocalMachine')
+    FunctionsToExport = @('Get-YcRequiredModules', 'Initialize-YcEventLogging', 'YcLog-Event', 'New-YcSecret', 'Get-YcSecret', 'Get-YcJsonConfig', 'Write-YcLogFile', 'New-YcSampleConfig', 'Convert-YcSecureStringToPlainText', 'Get-YcOpenAiAPIKey', 'Get-YcOpenAiResponse', 'Read-YcAzAiDiStringResponse', 'Submit-YcFileForAzAiDiAnalysis', 'Get-YcPatternFromAzAiDiAnalysis', 'Send-YcMgEmail', 'New-YcMgMailMessageBody', 'New-YcSelfSignedCertForAppReg', 'New-YcRandomPassword', 'Import-YcCertToLocalMachine', 'Protect-LogMessage')
     Description = 'A core module for logging, setting up config files, storing and accessing credentials and API Keys safely and more.'
     RequiredModules = @(
         @{
