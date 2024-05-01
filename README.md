@@ -36,7 +36,6 @@ Yamautomate.Core provides a comprehensive set of functions for managing various 
 # Yamautomate.AI
 | Function                         | Description                                                                                                                    |
 |----------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
-
 | `Submit-YcFileForAzAiDiAnalysis` | Submits a file or URL for analysis by Azure AI Form Recognizer, converts it into an appropriate format, and sends a POST request to the API. Returns relevant information or error details. |
 | `Read-YcAzAiDiStringResponse`    | Processes a raw Azure API response into a consolidated object, extracting key information such as HTTP status, operation location, request ID, and content type. |
 | `Get-YcPatternFromAzAiDiAnalysis`| Retrieves text content from an Azure AI Form Recognizer analysis and searches it for specified patterns. Returns an array of matched patterns. |
