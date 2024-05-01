@@ -1,6 +1,6 @@
 # Yamautomate.Core
 
-My personal core library for automating things.
+My personal core module for logging, setting up config files, storing and accessing credentials and API Keys safely and more.
 
 ## Available Functions
 | Function      | Description | Parameters |
