@@ -11,5 +11,13 @@
             ModuleName = 'CredentialManager'
             ModuleVersion = '2.0'
         }
+        @{
+            ModuleName = 'Az.Accounts'
+            ModuleVersion = '2.17.0'
+        }
+        @{
+            ModuleName = 'Az.KeyVault'
+            ModuleVersion = '5.2.2'
+        }
     )
 }
