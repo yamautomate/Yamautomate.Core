@@ -2,6 +2,14 @@
 
 My personal core module for logging, setting up configuration files, securely storing and accessing credentials, and managing other utilities.
 
+## Features
+Yamautomate.Core provides a comprehensive set of functions for managing various aspects of application logging, configuration, and credential storage. The module offers capabilities such as:
+
+- **Logging:** Functions for event logging to the system or files, including log rotation and archiving.
+- **Configuration:** Functions for retrieving JSON configuration files, creating sample configurations, and storing/retrieving settings.
+- **Credential Management:** Functions for securely storing, retrieving, and converting secrets across various locations such as Azure Key Vault, Windows Credential Store or if needed Environment Variables
+- **Azure Integrations:** Functions for connecting to Azure services, analyzing files with Azure AI Form Recognizer, and extracting key information.
+
 ## Available Functions
 
 | Function                         | Description                                                                                                                    |
