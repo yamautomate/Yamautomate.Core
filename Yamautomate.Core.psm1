@@ -49,6 +49,7 @@ function New-YcEventLog {
         [Parameter(Mandatory=$true)] [string]$message
     )
 
+    $message = Protect-LogMessage($message)
     Write-EventLog -LogName $logName -Source $source -EntryType $entryType -EventId $eventId -Message $message
 }
 
@@ -66,20 +67,65 @@ function Write-YcLogFile {
 
     $currentDate = Get-Date -Format "yyyy-MM-dd"
     $LogFilePath = "$LogDirectory\YCLog_$source-$currentDate.txt"
-    
-    # Get the current timestamp
-    $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-
-    # Format the log message with a timestamp
-    $LogMessage = "$Source @ $Timestamp : $Message"
-
     If (!(Test-Path $LogFilePath))
     {
         New-Item -ItemType File -Path $LogFilePath | Out-Null
     }
 
+    $message = Protect-LogMessage($message)
+
+    $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $LogMessage = "$Source @ $Timestamp : $Message"
+
     # Append the log message to the specified file
     Add-Content -Path $LogFilePath -Value $LogMessage
+
+}
+
+function Protect-LogMessage {
+    param (
+        [Parameter(Mandatory = $true, Position = 0)] [string]$message
+    )
+
+    $clientSecretPattern = "\b([a-zA-Z0-9~.]{36,40})\b" 
+    $bearerPattern = "Bearer \w+"
+    $APIKeyPattern = "APIKey_\w+"
+    $URLwithQueryPattern = "https?:\/\/[a-zA-Z0-9-]+\.[a-zA-Z0-9.-]+(\/[a-zA-Z0-9-_]+)*\?[\w=&]+"
+    $passwordPattern = "\bPassword\s*:\s*\w+\b"
+    $creditCardPattern = "\b(?:\d{4}-?){4,5}\b"
+
+    $patternsToMask = @($clientSecretPattern, $bearerPattern, $APIKeyPattern, $passwordPattern, $creditCardPattern, $URLwithQueryPattern)
+
+    # Replace sensitive patterns with 'REDACTED'
+    foreach ($pattern in $patternsToMask) {
+
+        switch ($pattern) {
+            $bearerPattern {  
+                $message = [regex]::Replace($message, $pattern, {param($m) $m.Value.Substring(0, 6) + "******"})
+            }
+            $APIKeyPattern {
+                $message = [regex]::Replace($message, $pattern, {param($m) $m.Value.Substring(0, 6) + "******"})
+            }
+            $passwordPattern {
+                $message = [regex]::Replace($message, $pattern, {param($m) $m.Value.Substring(0, 6) + "******"})
+            }
+            $creditCardPattern {
+                $message = [regex]::Replace($message, $pattern, {param($m) $m.Value.Substring(0, 6) + "******"})
+            }
+            $clientSecretPattern {
+                $message = [regex]::Replace($message, $pattern, {param($m) $m.Value.Substring(0, 6) + "******"})
+            }
+            $URLwithQueryPattern {
+                $message = [regex]::Replace($message, $pattern, {param($m) $m.Value.Substring(0, 20) + "******"})
+            }
+            Default {
+                $message = [regex]::Replace($message, $pattern, "REDACTED")
+            }
+        }
+    }
+
+    return $message
+    
 }
 
 function New-YcSecret {
