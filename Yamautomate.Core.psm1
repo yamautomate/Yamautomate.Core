@@ -139,7 +139,7 @@ function New-YcSecret {
             }
         AzureKeyVault
             {
-                Get-RequiredModules -moduleName "Az"
+                Get-RequiredModules -moduleName "Az.Accounts"
 
                 Get-YcSecret -WindowsCredentialStore -secretName $AzKeyVaultClientId
                 Connect-AzAccount -ServicePrincipal -ApplicationId $AzKeyVaultClientId -TenantId $AzKeyVaultTenantId -Credential (New-Object -TypeName PSCredential -ArgumentList $clientId, $clientSecret)
@@ -160,6 +160,8 @@ function Get-YcSecret {
         [Parameter(Mandatory=$false)] [string]$AzKeyVaultClientId,
         [Parameter(Mandatory=$false)] [string]$AzKeyVaultTenantId,
         [Parameter(Mandatory=$false)] [string]$AzKeyVaultName,
+        [Parameter(Mandatory=$false)] [string]$AzKeyVaultCertThumbprint,
+        [Parameter(Mandatory=$false)] [bool]$AsPlainText = $false,
         [Parameter(Mandatory=$false)] [bool]$SupressErrors = $false
     )
 
@@ -213,15 +215,21 @@ function Get-YcSecret {
         }
         AzureKeyVault
         {
-            Get-YcRequiredModules -moduleName "Az"
+            Get-YcRequiredModules -moduleName "Az.Accounts"
+            Get-YcRequiredModules -moduleName "Az.KeyVault"
 
-            Get-YcSecret -WindowsCredentialStore -secretName $AzKeyVaultClientId
-            Connect-AzAccount -ServicePrincipal -ApplicationId $AzKeyVaultClientId -TenantId $AzKeyVaultTenantId -Credential (New-Object -TypeName PSCredential -ArgumentList $clientId, $clientSecret)
+            Connect-AzAccount -ApplicationId $AzKeyVaultClientId -CertificateThumbprint $AzKeyVaultCertThumbprint -TenantId $AzKeyVaultTenantId | Out-Null
 
-            $secret = Get-AzKeyVaultSecret -VaultName $AzKeyVaultName -Name $secretName
-            
-            return $secret
+            if ($AsPlainText -eq $true)
+            {
+                $Secret = Get-AzKeyVaultSecret -VaultName $AzKeyVaultName -Name $secretName -AsPlainText
+            }
+            else
+            {
+                $Secret = Get-AzKeyVaultSecret -VaultName $AzKeyVaultName -Name $secretName
+            }
 
+            return $Secret
         }
         Default {}
 }
@@ -265,6 +273,15 @@ function New-YcSampleConfig {
         "EventLogging" = @(
             @{
                 "NameOfEventSource" = "NameOfSolution"
+            }
+        )
+
+        "AzureKeyVault" = @(
+            @{
+                "tenantId" = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxx"
+                "AzureAppRegistrationClientId" = "xxxxxxx-xxxxxxx-xxxxxxx-xxxxxxxx"
+                "KeyVaultName" = "xxxxxxx-xxxxxxx-xxxxxxx-xxxxxxxx"
+                "CertificateThumbprint" = "xxxxxxx-xxxxxxx-xxxxxxx-xxxxxxxx"
             }
         )
 
@@ -647,4 +664,59 @@ function New-YcMgMailMessageBody {
 
     return $message
     
+}
+
+function New-YcRandomPassword {
+    param (
+        [int]$length = 32 # Default length is 32 characters
+    )
+
+    $charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;:',.<>?/"
+    $password = -join ((0..($length-1)) | ForEach-Object { $charset[(Get-Random -Maximum $charset.Length)] })
+    return $password
+}
+
+function New-YcSelfSignedCertForAppReg {
+    param (
+        [Parameter(Mandatory=$true)] [string]$subject,
+        [Parameter(Mandatory=$true)] [string]$validForYears
+    )
+
+    # Create the certificate
+    $cert = New-SelfSignedCertificate -Subject "CN=$Subject" -CertStoreLocation "Cert:\CurrentUser\My" -KeyExportPolicy Exportable -KeySpec Signature -NotAfter (Get-Date).AddYears($validForYears)
+
+    # Extract the thumbprint explicitly
+    $thumbprint = $cert.Thumbprint
+
+    # Generate a random password for exporting the certificate
+    $password = New-YcRandomPassword
+    $securePassword = ConvertTo-SecureString -String $password -AsPlainText -Force
+
+    # Export the certificate to a .pfx file including the private key
+    $pfxFilePath = "$env:USERPROFILE\Downloads\AppRegCert.pfx"
+    Export-PfxCertificate -Cert "Cert:\CurrentUser\My\$thumbprint" -FilePath $pfxFilePath -Password $securePassword | Out-Null
+
+    # Export the public key only as a .cer file (optional)
+    $cerFilePath = "$env:USERPROFILE\Downloads\AppRegCert.cer"
+    Get-ChildItem "Cert:\CurrentUser\My\$thumbprint" | Export-Certificate -FilePath $cerFilePath -Force | Out-Null
+
+    # Create a custom object for the output
+    $output = New-Object PSObject -Property @{
+        "Thumbprint" = $thumbprint
+        "PfxFilePath" = $pfxFilePath
+        "CerFilePath" = $cerFilePath
+        "Password" = $password
+    }
+
+    return $output
+}
+
+function Import-YcCertToLocalMachine {
+    param (
+        [Parameter(Mandatory=$true)] [string]$pfxFilePath,
+        [Parameter(Mandatory=$true)] [SecureString]$securePassword
+    )
+
+    Import-PfxCertificate -FilePath $pfxFilePath -CertStoreLocation "Cert:\LocalMachine\My" -Password $securePassword
+    Write-Output "Certificate imported successfully into the Local Machine store."
 }
