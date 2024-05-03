@@ -4,13 +4,13 @@ function Get-YcRequiredModules {
     The Get-YcRequiredModules function checks for the availability and import status of a specified PowerShell module and attempts to import it if necessary.
 
     .DESCRIPTION
-    The Get-YcRequiredModules function takes the name of a PowerShell module as input and verifies its installation and import status.
+    The Get-YcRequiredModules function takes the name of several PowerShell modules as input and verifies its installation and import status.
     If the module is not installed, it alerts the user to install it. 
     If the module is installed but not imported, the function attempts to import it. 
     If importing fails, an error message is displayed.
 
-    .PARAMETER moduleName
-    The moduleName parameter is a mandatory string parameter specifying the name of the module to check for.
+    .PARAMETER moduleNames
+    The moduleName parameter is a mandatory array of string specifying the name of the modules to check for.
 
     .INPUTS
     The function does not accept any pipeline input.
@@ -25,30 +25,34 @@ function Get-YcRequiredModules {
     #>
 
     param (
-        [Parameter(Mandatory=$true, Position = 0)] [ValidateNotNullOrEmpty()] [string]$moduleName
+        [Parameter(Mandatory=$true, Position = 0)] [ValidateNotNullOrEmpty()] [string[]]$moduleNames
     )
 
-    # Check if the module is installed
-    $moduleInstalled = Get-Module -ListAvailable -Name $moduleName
-
-    if (-not $moduleInstalled) 
+    Foreach ($Module in $ModuleNames)
     {
-        Write-Host "The required module '$moduleName' is not installed. Please install it." -ForegroundColor Yellow
-        return 
-    }
+        # Check if the module is installed
+        $moduleInstalled = Get-Module -ListAvailable -Name $module
 
-    # Check if the module is imported
-    $moduleImported = Get-Module -Name $moduleName
-    if (-not $moduleImported) 
-    {
-        Write-Host "The required module '$moduleName' is not imported. Trying to import it." -ForegroundColor Yellow
+        if (-not $moduleInstalled) 
+        {
+            $message = "The required module '$module' is not installed. Please install it."
+            Write-Host $message -ForegroundColor Yellow
+            return 
+        }
 
-        try {
-            Import-Module -Name $moduleName
-        } 
-        
-        catch {
-            Write-Error "Could not import module '$moduleName' due to error: $_"
+        # Check if the module is imported
+        $moduleImported = Get-Module -Name $module
+        if (-not $moduleImported) 
+        {
+            Write-Host "The required module '$module' is not imported. Trying to import it." -ForegroundColor Yellow
+
+            try {
+                Import-Module -Name $module
+            } 
+            
+            catch {
+                Write-Error "Could not import module '$module' due to error: $_"
+            }
         }
     }
 }
@@ -465,7 +469,8 @@ function Get-YcSecret {
         [Parameter(Mandatory=$false, Position = 7)] [bool]$SupressErrors = $false
     )
 
-    Get-YcRequiredModules -moduleName "CredentialManager"
+    $requiredModules = "CredentialManager"
+    Get-YcRequiredModules $requiredModules
 
     switch ($SecretLocation) {
         WindowsCredentialStore 
@@ -517,18 +522,26 @@ function Get-YcSecret {
 
         AzureKeyVault
         {
-            Get-YcRequiredModules -moduleName "Az.Accounts"
-            Get-YcRequiredModules -moduleName "Az.KeyVault"
+            $requiredModules = "Az.Accounts", "Az.KeyVault"
+            Get-YcRequiredModules $requiredModules
 
-            Connect-AzAccount -ApplicationId $AzKeyVaultClientId -CertificateThumbprint $AzKeyVaultCertThumbprint -TenantId $AzKeyVaultTenantId | Out-Null
-
-            if ($AsPlainText -eq $true)
-            {
-                $Secret = Get-AzKeyVaultSecret -VaultName $AzKeyVaultName -Name $secretName -AsPlainText
+            try {
+                Connect-AzAccount -ApplicationId $AzKeyVaultClientId -CertificateThumbprint $AzKeyVaultCertThumbprint -TenantId $AzKeyVaultTenantId | Out-Null
+                if ($AsPlainText -eq $true)
+                {
+                    $Secret = Get-AzKeyVaultSecret -VaultName $AzKeyVaultName -Name $secretName -AsPlainText
+                }
+                else
+                {
+                    $Secret = Get-AzKeyVaultSecret -VaultName $AzKeyVaultName -Name $secretName
+                }  
             }
-            else
-            {
-                $Secret = Get-AzKeyVaultSecret -VaultName $AzKeyVaultName -Name $secretName
+            catch {
+                $Message = "Could not connect to Az Account and or retrieve AzVaultSecret: " +$secretName+ "from Vault: "+$AzKeyVaultName+" Error Details: "+$_.Exception.Message
+                Write-Host $Message -ForegroundColor Red
+            }
+            finally {
+                Disconnect-AzAccount
             }
 
             return $Secret
@@ -838,127 +851,10 @@ function Import-YcCertToLocalMachine {
     Write-Output "Certificate imported successfully into the Local Machine store."
 }
 
-Function Send-YcMgEmail{
-    <#
-    .SYNOPSIS
-    The Send-YcMgEmail function sends an email using Microsoft Graph.
- 
-    .DESCRIPTION
-    The Send-YcMgEmail function uses Microsoft Graph to send an email. 
-    It accepts mandatory parameters for the email message, subject, from address, and to address. 
-    Further mandatory parameters include a client ID, client secret name, and tenant ID for Microsoft Graph authentication. 
-    The function connects to Microsoft Graph, constructs the email message body, sends the message, and then disconnects from Microsoft Graph.
- 
-    .PARAMETER clientId
-    The clientId parameter is a mandatory string specifying the client ID for Microsoft Graph authentication.
- 
-    .PARAMETER clientSecretName
-    The clientSecretName parameter is a mandatory  string specifying the name of the client secret for Microsoft Graph authentication.
- 
-    .PARAMETER tenantId
-    The tenantId parameter is a mandatory  string specifying the tenant ID for Microsoft Graph authentication.
- 
-    .PARAMETER message
-    The message parameter is a mandatory string specifying the content of the email.
- 
-    .PARAMETER subject
-    The subject parameter is a mandatory string specifying the subject of the email.
- 
-    .PARAMETER from
-    The from parameter is a mandatory string specifying the sender's address.
- 
-    .PARAMETER to
-    The to parameter is a mandatory string specifying the recipient's address.
- 
-    .INPUTS
-    The function does not accept any pipeline input.
- 
-    .OUTPUTS
-    The function does not output any return value directly but sends an email via Microsoft Graph.
- 
-    .EXAMPLE
-    The following example shows how to send an email:
- 
-    PS> Send-YcMgEmail -clientId "your-client-id" -clientSecretName "your-client-secret" -tenantId "your-tenant-id" -message "Hello, world!" -subject "Greeting" -from "sender@example.com" -to "recipient@example.com"
- 
-    #>
-    param(
-        [Parameter(Mandatory=$true, Position = 0)] [ValidateNotNullOrEmpty()] [string]$clientId,
-        [Parameter(Mandatory=$true, Position = 1)] [ValidateNotNullOrEmpty()] [string]$clientSecretName,
-        [Parameter(Mandatory=$true, Position = 2)] [ValidateNotNullOrEmpty()] [string]$tenantId,
-        [Parameter(Mandatory=$true, Position = 3)] [ValidateNotNullOrEmpty()] [string]$message,
-        [Parameter(Mandatory=$true, Position = 4)] [ValidateNotNullOrEmpty()] [string]$subject,
-        [Parameter(Mandatory=$true, Position = 5)] [ValidateNotNullOrEmpty()] [string]$from,
-        [Parameter(Mandatory=$true, Position = 6)] [ValidateNotNullOrEmpty()] [string]$to
-    )
- 
-    Get-YcRequiredModules -moduleName "Microsoft.Graph"
- 
-    $messageBody = New-YcMgMailMessageBody -message $message -subject $subject -to $to 
- 
-    Connect-MgGraph -ClientId $clientId -ClientSecret $clientSecret -TenantId $tenantId
-    New-MgUserMessageSend -UserId $from -BodyParameter $messageBody
-    Disconnect-MgGraph
- 
-    $clientSecret = $null
- }
- function New-YcMgMailMessageBody {
-    <#
-    .SYNOPSIS
-    The New-YcMgMailMessageBody function constructs an email message body for Microsoft Graph.
- 
-    .DESCRIPTION
-    The New-YcMgMailMessageBody function constructs a dictionary that represents an email message body for Microsoft Graph. 
-    It accepts mandatory parameters for the message content, subject, and recipient address. 
-    The function constructs a dictionary with fields for the subject, content type, content, and recipient details, and returns this dictionary as output.
- 
-    .PARAMETER message
-    The message parameter is a mandatory string specifying the content of the email.
- 
-    .PARAMETER subject
-    The subject parameter is a mandatory string specifying the subject of the email.
- 
-    .PARAMETER to
-    The to parameter is a mandatory string specifying the recipient's email address.
- 
-    .INPUTS
-    The function does not accept any pipeline input.
- 
-    .OUTPUTS
-    The function returns a dictionary representing the email message body.
- 
-    .EXAMPLE
-    The following example shows how to construct an email message body:
- 
-    PS> New-YcMgMailMessageBody -message "Hello, world!" -subject "Greeting" -to "recipient@example.com"
-    #>
- 
-    param (
-        [Parameter(Mandatory=$true, Position = 0)] [ValidateNotNullOrEmpty()] [string]$message,
-        [Parameter(Mandatory=$true, Position = 1)] [ValidateNotNullOrEmpty()] [string]$subject,
-        [Parameter(Mandatory=$true, Position = 2)] [ValidateNotNullOrEmpty()] [string]$to
-    )
- 
-    $message = @{
-        Message = @{
-            Subject = $subject
-            Body = @{
-                ContentType = "Text"
-                Content = $message
-            }
-            ToRecipients = @(
-                @{
-                    EmailAddress = @{
-                        Address = $to
-                    }
-                }
-            )
-        }
-    }
- 
-    return $message
-    
- }
+function New-YcGUID {
+    $newGUID = [guid]::NewGuid()
+    return $newGUID.guid
+}
  
 class YcConfigTemplate {
     [string]$EventSource = "******"
@@ -1032,4 +928,6 @@ class YcConfigTemplate {
         return $config | ConvertTo-Json -Depth 4
     }
 }
+
+
 
