@@ -929,5 +929,14 @@ class YcConfigTemplate {
     }
 }
 
+function Set-YcWindowsDigitalActivation{
+    $computer = gc env:computername
+    $key = (wmic path softwarelicensingservice get oa3xoriginalproductkey)[2].Trim() #<--The Trim is to remove the white space afterwards which causes an error
+    Write-Output $key
+    $service = get-wmiObject -query "select * from SoftwareLicensingService" -computername $computer
+    $service.InstallProductKey($key)
+    $service.RefreshLicenseStatus()
+}
+
 
 
