@@ -40,6 +40,10 @@ function Get-YcRequiredModules {
             return 
         }
 
+        else {
+            $message = "The required module '$module' is already installed. Trying to import it."
+        }
+
         # Check if the module is imported
         $moduleImported = Get-Module -Name $module
         if (-not $moduleImported) 
@@ -53,6 +57,9 @@ function Get-YcRequiredModules {
             catch {
                 Write-Error "Could not import module '$module' due to error: $_"
             }
+        }
+        else {
+            Write-Host "The required module '$module' is already imported. Doing nothing." -ForegroundColor Green
         }
     }
 }
@@ -526,7 +533,16 @@ function Get-YcSecret {
             Get-YcRequiredModules $requiredModules
 
             try {
+                    
+                Write-Host ("Trying to connect to KeyVault: "+$AzKeyVaultName+" from Tenant: "+$AzKeyVaultTenantId+"") -ForegroundColor Yellow
+                Write-Host ("Using AppId: "+$AzKeyVaultClientId+"") -ForegroundColor Yellow
+
                 Connect-AzAccount -ApplicationId $AzKeyVaultClientId -CertificateThumbprint $AzKeyVaultCertThumbprint -TenantId $AzKeyVaultTenantId | Out-Null
+                Write-Host ("Connected successfully to AzVaultKeyVault: "+$AzKeyVaultName+"") -ForegroundColor Green
+
+
+                Write-Host ("Grabbing Secret: "+$secretName+"") -ForegroundColor Yellow
+
                 if ($AsPlainText -eq $true)
                 {
                     $Secret = Get-AzKeyVaultSecret -VaultName $AzKeyVaultName -Name $secretName -AsPlainText
@@ -535,17 +551,28 @@ function Get-YcSecret {
                 {
                     $Secret = Get-AzKeyVaultSecret -VaultName $AzKeyVaultName -Name $secretName
                 }  
+
+                if ($Secret -eq $null)
+                {
+                    Write-Host ("Secret is NULL: "+$secretName+"") -ForegroundColor Red
+                }
+                else {
+                    Write-Host ("Retreieved Secret: "+$secretName+"") -ForegroundColor Green
+                }
+
             }
             catch {
-                $Message = "Could not connect to Az Account and or retrieve AzVaultSecret: " +$secretName+ "from Vault: "+$AzKeyVaultName+" Error Details: "+$_.Exception.Message
-                Write-Host $Message -ForegroundColor Red
+                Write-Host ("Could not connect to Az Account and or retrieve AzVaultSecret: " +$secretName+ "from Vault: "+$AzKeyVaultName+" Error Details: "+$_.Exception.Message) -ForegroundColor Red
             }
             finally {
-                Disconnect-AzAccount
+
+                Disconnect-AzAccount | Out-Null
+                Write-host ("Successfully disconnected from AzAccount") -ForegroundColor Green
             }
 
             return $Secret
         }
+
         Default {}
     }
 }
@@ -928,6 +955,3 @@ class YcConfigTemplate {
         return $config | ConvertTo-Json -Depth 4
     }
 }
-
-
-
