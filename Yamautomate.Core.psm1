@@ -532,14 +532,32 @@ function Get-YcSecret {
             $requiredModules = "Az.Accounts", "Az.KeyVault"
             Get-YcRequiredModules $requiredModules
 
-            try {
-                    
+            #Checking if certifcate exists
+            $certCheck = Get-ChildItem -Path Cert:\LocalMachine\My | Where-Object { $_.Thumbprint -eq $AzKeyVaultCertThumbprint }
+            if ($certCheck) {
+                Write-Host "Certificate found in LocalMachine store:" -ForegroundColor Green
+                $certCheck
+            } else {
+                Write-Host "Certificate not found in LocalMachine store." -ForegroundColor Red
+                throw
+            }
+
+            # Checking in CurrentUser store
+            $certCheck2 = Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Thumbprint -eq $AzKeyVaultCertThumbprint  }
+            if ($certCheck2) {
+                Write-Host "Certificate found in CurrentUser store:" -ForegroundColor Green
+                $certCheck2
+            } else {
+                Write-Host "Certificate not found in CurrentUser store." -ForegroundColor Red
+                throw
+            }
+
+            try { 
                 Write-Host ("Trying to connect to KeyVault: "+$AzKeyVaultName+" from Tenant: "+$AzKeyVaultTenantId+"") -ForegroundColor Yellow
                 Write-Host ("Using AppId: "+$AzKeyVaultClientId+"") -ForegroundColor Yellow
 
                 Connect-AzAccount -ApplicationId $AzKeyVaultClientId -CertificateThumbprint $AzKeyVaultCertThumbprint -TenantId $AzKeyVaultTenantId | Out-Null
                 Write-Host ("Connected successfully to AzVaultKeyVault: "+$AzKeyVaultName+"") -ForegroundColor Green
-
 
                 Write-Host ("Grabbing Secret: "+$secretName+"") -ForegroundColor Yellow
 
@@ -563,6 +581,7 @@ function Get-YcSecret {
             }
             catch {
                 Write-Host ("Could not connect to Az Account and or retrieve AzVaultSecret: " +$secretName+ "from Vault: "+$AzKeyVaultName+" Error Details: "+$_.Exception.Message) -ForegroundColor Red
+                throw
             }
             finally {
 
