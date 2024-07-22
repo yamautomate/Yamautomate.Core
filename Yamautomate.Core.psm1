@@ -586,6 +586,104 @@ function Get-YcSecret {
     }
 }
 
+function Get-YcCurrentUserType {
+    # Check if the current user is an administrator
+    $isAdmin = (New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if ($isAdmin) {
+        Write-Host "The current user has administrative privileges." -ForegroundColor Green
+        $UserType = "Administrator"
+    } else {
+        Write-Host "The current user does NOT have administrative privileges." -ForegroundColor Yellow
+        $UserType = "User"
+    }
+    return $UserType
+}
+
+
+function Get-YcCertificateForAuth {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$thumbprint
+    )
+
+    # Get the current user
+    $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    Write-Host "Current user: $currentUser" -ForegroundColor Yellow
+
+    # Check if the current user is an administrator
+    Get-YcCurrentUserType
+
+    # Define certificate stores to check
+    $certStoreLocations = @("LocalMachine\My", "CurrentUser\My")
+
+    $certFound = $false
+    $hasAccess = $false
+
+    foreach ($certStoreLocation in $certStoreLocations) {
+        # Check if the certificate exists in the current store
+        $certificate = Get-ChildItem -Path "Cert:\$certStoreLocation" | Where-Object { $_.Thumbprint -eq $thumbprint }
+        if ($certificate) {
+            Write-Host "Certificate found in $certStoreLocation store." -ForegroundColor Green
+            $certFound = $true
+
+            if ($certificate.HasPrivateKey) {
+                Write-Host "The certificate has a private key." -ForegroundColor Green
+                
+                # Determine key type and get the key container name
+                $keyName = $null
+                $keyPath = $null
+                try {
+                    if ($certificate.PrivateKey.CspKeyContainerInfo) {
+                        $keyName = $certificate.PrivateKey.CspKeyContainerInfo.UniqueKeyContainerName
+                        Write-Host "Key container name (CSP): $keyName" -ForegroundColor Yellow
+                    } elseif ($certificate.PrivateKey.Key.UniqueName) {
+                        $keyName = $certificate.PrivateKey.Key.UniqueName
+                        Write-Host "Key container name (CNG): $keyName" -ForegroundColor Yellow
+                    }
+                } catch {
+                    Write-Host "Failed to retrieve the key container name." -ForegroundColor Red
+                }
+
+                if ($keyName) {
+                    if ($certStoreLocation -like "LocalMachine\*") {
+                        $root = "C:\ProgramData\Microsoft\Crypto\RSA\MachineKeys"
+                        $keyPath = [System.IO.Path]::Combine($root, $keyName)
+                    } elseif ($certStoreLocation -like "CurrentUser\*") {
+                        $root = [System.IO.Path]::Combine([Environment]::GetFolderPath("ApplicationData"), "Microsoft\Crypto\RSA")
+                        $keyPath = Get-ChildItem -Path $root -Recurse | Where-Object { $_.Name -eq $keyName } | Select-Object -First 1
+                    }
+
+                    if ($keyPath -and (Test-Path $keyPath)) {
+                        Write-Host "Private key file found at: $keyPath" -ForegroundColor Green
+                        $hasAccess = $true
+
+                    } else {
+                        Write-Host "Private key file not found: $keyPath" -ForegroundColor Red
+                        throw "Private key file not found."
+                    }
+                } else {
+                    Write-Host "Could not determine the key container name." -ForegroundColor Red
+                    throw "Key container name is not available."
+                }
+            } else {
+                Write-Host "The certificate does not have a private key." -ForegroundColor Red
+            }
+        } 
+    }
+
+    if (-not $certFound) {
+        throw "Certificate with thumbprint $thumbprint not found in any specified store."
+        }
+
+    return $hasAccess
+}
+
+
+
+# Define the certificate thumbprint
+$AzKeyVaultCertThumbprint = "BD96B63EAF65E5178FB3BB55CDBE5B5139D1852C"
+
+
 function Get-YcJsonConfig {
         <#
     .SYNOPSIS
@@ -635,7 +733,6 @@ function Get-YcJsonConfig {
         Write-Host $ErrorMessage
     }
 }
-
 function New-YcSampleConfig {
     <#
     .SYNOPSIS
@@ -723,7 +820,6 @@ function New-YcSampleConfig {
     $OutputMessage = "Get-New-YcSampleConfig @ "+(Get-Date)+": Sample configuration created successfully at "+$ConfigPath
     Write-Host $OutputMessage -ForegroundColor Green
 }
-
 function Convert-YcSecureStringToPlainText {
     <#
     .SYNOPSIS
