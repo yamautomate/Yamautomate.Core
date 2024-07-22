@@ -533,13 +533,13 @@ function Get-YcSecret {
             Get-YcRequiredModules $requiredModules
 
             # Checking in LocalMachine store
-            $certCheckLocalMachine = Get-ChildItem -Path Cert:\LocalMachine\My | Where-Object { $_.Thumbprint -eq $thumbprint }
+            $certCheckLocalMachine = Get-ChildItem -Path Cert:\LocalMachine\My | Where-Object { $_.Thumbprint -eq $AzKeyVaultCertThumbprint  }
             # Checking in CurrentUser store
-            $certCheckCurrentUser = Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Thumbprint -eq $thumbprint }
+            $certCheckCurrentUser = Get-ChildItem -Path Cert:\CurrentUser\My | Where-Object { $_.Thumbprint -eq $AzKeyVaultCertThumbprint  }
 
             # If the certificate is not found in either store, throw an exception
             if (-not $certCheckLocalMachine -and -not $certCheckCurrentUser) {
-                throw "Certificate with thumbprint $thumbprint not found in either LocalMachine or CurrentUser store. Aborting."
+                throw "Certificate with thumbprint $AzKeyVaultCertThumbprint  not found in either LocalMachine or CurrentUser store. Aborting."
             }
 
             try { 
