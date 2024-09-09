@@ -544,7 +544,7 @@ function New-YcMgMailMessageBody {
 function Get-YcCurrentUserType {
  
     param (
-        [Parameter(Mandatory=$true, Position = 0)] [ValidateNotNullOrEmpty()] [switch]$LogOutput
+        [Parameter(Mandatory=$false, Position = 0)] [ValidateNotNullOrEmpty()] [switch]$LogOutput
     )
 
     # Check if the current user is an administrator
