@@ -36,17 +36,21 @@ Function New-YcAdUser {
         $rawDomainName = $config.ActiveDirectory.rawDomainName
         $SwapDomainsForEmailAlias = $config.ActiveDirectory.SecondarySMTPAlias
         $SetOfficeIpPhone = $config.ActiveDirectory.SetOfficeIpPhone
+        $strUserEnabled = $config.ActiveDirectory.NewUserEnabled
+        $strChangePasswordAtLogon = $config.ActiveDirectory.ChangePasswordAtLogon
+
+        #Initialize Booleans with default values
+        $PathToLogFile = "$env:USERPROFILE\.yc"
+        [bool]$ChangePasswordAtLogon = $false
+        [bool]$UserEnabled = $false
+        [bool]$LogToEventLog = $false
+        [bool]$LogToLogFile = $false
+        [bool]$LogToOutput = $false
+        [bool]$LogToHost = $true
     }
     catch {
         throw ("Could not grab contents of ConfigFile. Aborting. Error Details: "+$_.Exception.Message)
     }
-
-    #Initialize Logging vars
-    [bool]$LogToEventLog = $false
-    [bool]$LogToLogFile = $false
-    [bool]$LogToOutput = $false
-    [bool]$LogToHost = $true
-
 
     #Grab values from config if Log is enabled
     If ($LogEnabled) 
@@ -55,6 +59,15 @@ Function New-YcAdUser {
          $strLogToLogFile = $config.EventLogging.LogToLogFile
          $strLogToOutput = $config.EventLogging.LogToOutput
          $strLogToHost = $config.EventLogging.LogToHost
+         $strPathToLogFile = $config.EventLogging.PathToLogFile
+
+         if ($strPathToLogFile)
+         {
+            $PathToLogFile = $strPathToLogFile
+         }
+         else {
+            $PathToLogFile = "$env:USERPROFILE\.yc"
+         }
  
          If ($strLogToEventLog -eq "true")
          {
@@ -92,12 +105,22 @@ Function New-YcAdUser {
     $samAccountName = "$firstname.$lastname"
     $primaryEmail = "$firstname.$lastname@$rawDomainname$TopLevelDomain"
 
-    Write-YcLogMessage ("Primary E-Mail Address for new User is: "+$primaryEmail) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
+    Write-YcLogMessage ("Primary E-Mail Address for new User is: "+$primaryEmail) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost -logDirectory $PathToLogFile
 
     # Create the Active Directory user
     try {
             #Create Random Password
             $InitialPw = New-YcRandomPassword -length 14
+
+            If ($StrUserEnabled -eq "true")
+            {
+                [bool]$UserEnabled = $true
+            }
+
+            If ($strChangePasswordAtLogon -eq "true")
+            {
+                [bool]$ChangePasswordAtLogon = $true
+            }
 
             New-ADUser `
             -GivenName $firstname `
@@ -115,31 +138,31 @@ Function New-YcAdUser {
             -City $City `
             -PostalCode $ZIPCode `
             -Country $Country `
-            -Enabled $true `
+            -Enabled $UserEnabled `
             -AccountPassword (ConvertTo-SecureString $InitialPw -AsPlainText -Force) `
-            -ChangePasswordAtLogon $true `
+            -ChangePasswordAtLogon $ChangePasswordAtLogon `
             -EmailAddress $primaryEmail
 
-            Write-YcLogMessage ("Successfully created new AD User: "+$samAccountName) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
+            Write-YcLogMessage ("Successfully created new AD User: "+$samAccountName) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost -logDirectory $PathToLogFile
     }
     catch {
-        Write-YcLogMessage ("Could not create AD User. Aborting. Error Details: "+$_.Exception.Message) Error -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
+        Write-YcLogMessage ("Could not create AD User. Aborting. Error Details: "+$_.Exception.Message) Error -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost -logDirectory $PathToLogFile
         throw ("Could not create AD User. Aborting. Error Details: "+$_.Exception.Message)
     }
 
     # Add organization tab information
     try {
         Set-ADUser -Identity $samAccountName -Title $jobTitle -Department $department -Manager $manager
-        Write-YcLogMessage ("Successfully set organizational info on new AD User: "+$samAccountName) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
+        Write-YcLogMessage ("Successfully set organizational info on new AD User: "+$samAccountName) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost -logDirectory $PathToLogFile
     }
     catch {
-        Write-YcLogMessage ("Could not set organization tab info on AD User. Aborting. Error Details: "+$_.Exception.Message) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
+        Write-YcLogMessage ("Could not set organization tab info on AD User. Aborting. Error Details: "+$_.Exception.Message) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost -logDirectory $PathToLogFile
         throw ("Could not set organization tab info  on AD User. Aborting. Error Details: "+$_.Exception.Message)
     }
 
     #Do we need to add second SMTP Alias?
     if ($SwapDomainsForEmailAlias -eq "true") {
-        Write-YcLogMessage ("SecondarySMTPAlias is enabled.") -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
+        Write-YcLogMessage ("SecondarySMTPAlias is enabled.") -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost -logDirectory $PathToLogFile
         $secondaryEmailTLD = $config.ActiveDirectory.MakeSecondary
 
         if ($secondaryEmailTLD -eq $TopLevelDomain)
@@ -155,10 +178,10 @@ Function New-YcAdUser {
         # Add proxy addresses to the user
         try {
             Set-ADUser -Identity $samAccountName -Add @{proxyAddresses=$proxyAddresses}
-            Write-YcLogMessage ("Successfully set proxy addresses on new AD User: "+$samAccountName) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
+            Write-YcLogMessage ("Successfully set proxy addresses on new AD User: "+$samAccountName) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost -logDirectory $PathToLogFile
         }
         catch {
-            Write-YcLogMessage ("Could not set proxy address on AD User. Aborting. Error Details: "+$_.Exception.Message) Error -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
+            Write-YcLogMessage ("Could not set proxy address on AD User. Aborting. Error Details: "+$_.Exception.Message) Error -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost -logDirectory $PathToLogFile
             throw ("Could not set proxy address on AD User. Aborting. Error Details: "+$_.Exception.Message)
         }
     }
@@ -168,10 +191,10 @@ Function New-YcAdUser {
     {
         try {
             Set-ADUser -Identity $samAccountName -Replace @{ipPhone=$CountryPhone}
-            Write-YcLogMessage ("Successfully set Ip Phone on: "+$samAccountName) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
+            Write-YcLogMessage ("Successfully set Ip Phone on: "+$samAccountName) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost -logDirectory $PathToLogFile
         }
         catch {
-            Write-YcLogMessage ("Could not set country-specific main phone number on AD User. Aborting. Error Details: "+$_.Exception.Message) Error -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
+            Write-YcLogMessage ("Could not set country-specific main phone number on AD User. Aborting. Error Details: "+$_.Exception.Message) Error -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost -logDirectory $PathToLogFile
             throw ("Could not set country-specific main phone number on AD User. Aborting. Error Details: "+$_.Exception.Message)
         }
     }
@@ -188,14 +211,16 @@ Function New-YcTeamsPhoneNumberAssignment {
         [Parameter(Mandatory=$false)][bool]$LogEnabled = $true
     )
 
+    #Check for required modules 
     try {
-        $requiredModules = @("MicrosoftTeams")
+        $requiredModules = @("MicIAMrosoftTeams")
         Get-YcRequiredModules -moduleNames $requiredModules -ErrorAction Stop
     }
     catch {
         throw ("Could not import needed modules. Aborting. Error Details: "+$_.Exception.Message)
     }
 
+    #Import config and map values to variables
     try {
         $config = Get-Content -raw -Path $PathToConfig | ConvertFrom-Json -ErrorAction Stop
         $locationForLookup = "Location-"+$location
@@ -289,15 +314,16 @@ Function New-YcTeamsPhoneNumberAssignment {
 function New-YcIAMSampleConfig {
     <#
     .SYNOPSIS
-    The New-YcSampleConfig function creates a sample configuration file at a specified path.
+    The New-YcIAMSampleConfig function creates a sample configuration file at a specified path.
 
     .DESCRIPTION
-    The New-YcSampleConfig function takes a mandatory path parameter to specify where to create a sample configuration file. 
+    The New-YcIAMSampleConfig function takes an optional path parameter to specify where to create a sample configuration file. 
     It defines a sample configuration as a PowerShell hashtable, converts it to a JSON string, and writes it to the specified path. 
     The configuration includes sections for event logging, Azure Key Vault, Azure General, API settings, solution settings, and notifications.
 
     .PARAMETER ConfigPath
-    The ConfigPath parameter is a mandatory string specifying the path where the configuration file will be created.
+    The ConfigPath parameter is an optional string specifying the directory where the configuration file will be created. If not specified, 
+    it defaults to `$env:USERPROFILE\.yc\YcIAMSampleConfig.json`.
 
     .INPUTS
     The function does not accept any pipeline input.
@@ -308,24 +334,38 @@ function New-YcIAMSampleConfig {
     .EXAMPLE
     The following example shows how to create a sample configuration file:
 
-    PS> New-YcSampleConfig -ConfigPath "C:\Configs\SampleConfig.json"
-
+    PS> New-YcIAMSampleConfig -ConfigPath "C:\Configs"
+    # Creates the file at C:\Configs\.yc\YcIAMSampleConfig.json
     #>
+
     param (
-        [Parameter(Mandatory=$false, Position = 0)] [ValidateNotNullOrEmpty()] [string]$ConfigPath = "$env:USERPROFILE\.yc"  # Path where the config file will be created
+        [Parameter(Mandatory=$false, Position=0)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ConfigPath = "$env:USERPROFILE"
     )
 
+    # Define the full path where the config file will be created
+    $FullPath = Join-Path -Path $ConfigPath -ChildPath ".yc\YcIAMSampleConfig.json"
+
+    # Create the configuration template
     $configTemplate = [YcIAMConfigTemplate]::new()
 
     # Convert the hashtable to a JSON string
     $jsonConfig = $configTemplate.ToJson()
 
-    # Write the JSON string to the specified file path
-    Set-Content -Path ($ConfigPath+"\YcIAMSampleConfig.json") -Value $jsonConfig -Force
+    # Check if the directory exists, and create it if not
+    If (!(Test-Path (Split-Path $FullPath -Parent))) {
+        New-Item -Path (Split-Path $FullPath -Parent) -ItemType Directory -Force
+    }
 
-    $OutputMessage = "Get-New-YcSampleConfig @ "+(Get-Date)+": Sample configuration created successfully at "+$ConfigPath+"\YcIAMSampleConfig.json"
+    # Write the JSON string to the specified file path
+    Set-Content -Path $FullPath -Value $jsonConfig -Force
+
+    # Output a success message
+    $OutputMessage = "New-YcIAMSampleConfig @ "+(Get-Date)+": Sample configuration created successfully at "+$FullPath
     Write-Host $OutputMessage -ForegroundColor Green
 }
+
 class YcIAMConfigTemplate {
    
     # Constructor
@@ -333,7 +373,7 @@ class YcIAMConfigTemplate {
 
     # Method to convert the class to a hashtable
     [hashtable] ToHashtable() {
-        return @{
+        return [ordered]@{
             "EventLogging" = @(
                 @{
                     "LogToEventlog" = "true"
@@ -357,6 +397,8 @@ class YcIAMConfigTemplate {
                     "MakeSecondary" = ".com"
                     "SwapWith" = ".ch"
                     "SetOfficeIpPhone" = "true"
+                    "NewUserEnabled" = "true"
+                    "ChangePasswordAtLogon" = "true"
                 }
             )
             "TeamsPhone" = @(
