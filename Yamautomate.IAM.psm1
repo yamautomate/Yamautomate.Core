@@ -8,11 +8,12 @@ Function New-YcAdUser {
         [Parameter(Mandatory=$true)] [string]$phoneNumber,
         [Parameter(Mandatory=$true)] [string]$jobTitle,
         [Parameter(Mandatory=$true)] [string]$manager,
-        [Parameter(Mandatory=$false)][string]$PathToConfig = "$env:USERPROFILE\.yc\NewAdUser-Config.json"
+        [Parameter(Mandatory=$false)][string]$PathToConfig = "$env:USERPROFILE\.yc\YcIAMSampleConfig.json",
+        [Parameter(Mandatory=$false)][string]$EventLogSource,
+        [Parameter(Mandatory=$false)][bool]$LogEnabled = $true
     )
-
+    #Check for required modules 
     try {
-        Import-Module Yamautomate.Core
         $requiredModules = @("ActiveDirectory")
         Get-YcRequiredModules -moduleNames $requiredModules -ErrorAction Stop
     }
@@ -20,11 +21,10 @@ Function New-YcAdUser {
         throw ("Could not import needed modules. Aborting. Error Details: "+$_.Exception.Message)
     }
     
-    $EventLogSource = "IdGov-NewAdUser"
-    Initialize-YcEventLogging -source $EventLogSource
-
+    #Import config and map values to variables
     try {
         $config = Get-Content -raw -Path $PathToConfig | ConvertFrom-Json -ErrorAction Stop
+
         $locationForLookup = "Location-"+$location
         $Street = $config.$locationForLookup.Street
         $City = $config.$locationForLookup.City
@@ -32,15 +32,59 @@ Function New-YcAdUser {
         $Country = $config.$locationForLookup.Country
         $CountryPhone = $config.$locationForLookup.Phone
         $TopLevelDomain = $config.$locationForLookup.TopLevelDomain
-        $OU = $config.ADSetup.OU
-        $rawDomainName = $config.ADSetup.rawDomainName
-        $SwapDomainsForEmailAlias = $config.ADSetup.SecondarySMTPAlias
-        $SetOfficeIpPhone = $config.ADSetup.SetOfficeIpPhone
-
-        Write-YcLogMessage ("Successfuly loaded config from path: "+$PathToConfig) -source $EventLogSource -ToOutput -ToEventLog 
+        $OU = $config.ActiveDirectory.OU
+        $rawDomainName = $config.ActiveDirectory.rawDomainName
+        $SwapDomainsForEmailAlias = $config.ActiveDirectory.SecondarySMTPAlias
+        $SetOfficeIpPhone = $config.ActiveDirectory.SetOfficeIpPhone
     }
     catch {
         throw ("Could not grab contents of ConfigFile. Aborting. Error Details: "+$_.Exception.Message)
+    }
+
+    #Initialize Logging vars
+    [bool]$LogToEventLog = $false
+    [bool]$LogToLogFile = $false
+    [bool]$LogToOutput = $false
+    [bool]$LogToHost = $true
+
+
+    #Grab values from config if Log is enabled
+    If ($LogEnabled) 
+    {
+         $strLogToEventLog = $config.EventLogging.LogToEventlog
+         $strLogToLogFile = $config.EventLogging.LogToLogFile
+         $strLogToOutput = $config.EventLogging.LogToOutput
+         $strLogToHost = $config.EventLogging.LogToHost
+ 
+         If ($strLogToEventLog -eq "true")
+         {
+             [bool]$LogToEventLog = $true
+         }
+ 
+         if ($strLogToLogFile -eq "true")
+         {
+             [bool]$LogToLogFile = $true
+         }
+ 
+         if ($strLogToOutput -eq "true")
+         {
+             [bool]$LogToOutput = $true
+         }
+ 
+         if ($strLogToHost -eq "true")
+         {
+             [bool]$LogToHost = $true
+         }
+    }
+
+    #Make sure there is a Event Source we can post among
+    If (!($EventLogSource))
+    {
+        $EventLogSource = $config.EventLogging.NameOfEventSource
+        If (!($EventLogSource) -or $EventLogSource -eq " ")
+        {
+            $EventLogSource = "Yc.IAM-New-AdUser"
+        }
     }
 
     # Construct the user’s full name and username with the location TLD
@@ -48,7 +92,7 @@ Function New-YcAdUser {
     $samAccountName = "$firstname.$lastname"
     $primaryEmail = "$firstname.$lastname@$rawDomainname$TopLevelDomain"
 
-    Write-YcLogMessage ("Primary E-Mail Address for new User is: "+$primaryEmail) -source $EventLogSource -ToEventLog -ToOutput 
+    Write-YcLogMessage ("Primary E-Mail Address for new User is: "+$primaryEmail) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
 
     # Create the Active Directory user
     try {
@@ -76,57 +120,58 @@ Function New-YcAdUser {
             -ChangePasswordAtLogon $true `
             -EmailAddress $primaryEmail
 
-            Write-YcLogMessage ("Successfully created new AD User: "+$samAccountName) -source $EventLogSource -ToEventLog -ToOutput 
+            Write-YcLogMessage ("Successfully created new AD User: "+$samAccountName) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
     }
     catch {
-        Write-YcLogMessage ("Could not create AD User. Aborting. Error Details: "+$_.Exception.Message) Error -source $EventLogSource -ToEventLog -ToOutput 
+        Write-YcLogMessage ("Could not create AD User. Aborting. Error Details: "+$_.Exception.Message) Error -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
         throw ("Could not create AD User. Aborting. Error Details: "+$_.Exception.Message)
     }
 
     # Add organization tab information
     try {
         Set-ADUser -Identity $samAccountName -Title $jobTitle -Department $department -Manager $manager
-        Write-YcLogMessage ("Successfully set organizational info on new AD User: "+$samAccountName) -source $EventLogSource -ToEventLog -ToOutput 
+        Write-YcLogMessage ("Successfully set organizational info on new AD User: "+$samAccountName) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
     }
     catch {
-        Write-YcLogMessage ("Could not set organization tab info on AD User. Aborting. Error Details: "+$_.Exception.Message) -source $EventLogSource -ToEventLog -ToOutput 
+        Write-YcLogMessage ("Could not set organization tab info on AD User. Aborting. Error Details: "+$_.Exception.Message) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
         throw ("Could not set organization tab info  on AD User. Aborting. Error Details: "+$_.Exception.Message)
     }
 
+    #Do we need to add second SMTP Alias?
     if ($SwapDomainsForEmailAlias -eq "true") {
-        Write-YcLogMessage ("SecondarySMTPAlias is enabled. ") -source $EventLogSource -ToEventLog -ToOutput 
-        $secondaryEmailTLD = $config.ADSetup.MakeSecondary
+        Write-YcLogMessage ("SecondarySMTPAlias is enabled.") -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
+        $secondaryEmailTLD = $config.ActiveDirectory.MakeSecondary
 
         if ($secondaryEmailTLD -eq $TopLevelDomain)
         {
-            $secondaryEmailTLD = $config.ADSetup.SwapWith
+            $secondaryEmailTLD = $config.ActiveDirectory.SwapWith
         }
 
         $secondaryEmail = "$firstname.$lastname@$rawDomainname$secondaryEmailTLD"
-        Write-YcLogMessage ("SecondarySMTPAlias is: "+$secondaryEmail) -source $EventLogSource -ToEventLog -ToOutput 
+        Write-YcLogMessage ("SecondarySMTPAlias is: "+$secondaryEmail) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
 
         $proxyAddresses = @("SMTP:$primaryEmail", "smtp:$secondaryEmail")
 
         # Add proxy addresses to the user
         try {
             Set-ADUser -Identity $samAccountName -Add @{proxyAddresses=$proxyAddresses}
-            Write-YcLogMessage ("Successfully set proxy addresses on new AD User: "+$samAccountName) -source $EventLogSource -ToEventLog -ToOutput 
+            Write-YcLogMessage ("Successfully set proxy addresses on new AD User: "+$samAccountName) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
         }
         catch {
-            Write-YcLogMessage ("Could not set proxy address on AD User. Aborting. Error Details: "+$_.Exception.Message) Error -source $EventLogSource -ToEventLog -ToOutput 
+            Write-YcLogMessage ("Could not set proxy address on AD User. Aborting. Error Details: "+$_.Exception.Message) Error -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
             throw ("Could not set proxy address on AD User. Aborting. Error Details: "+$_.Exception.Message)
         }
     }
 
-    #Set country-specific main phone number
+    #Wp we need to set country-specific main phone number
     if ($SetOfficeIpPhone -eq "true")
     {
         try {
             Set-ADUser -Identity $samAccountName -Replace @{ipPhone=$CountryPhone}
-            Write-YcLogMessage ("Successfully set Ip Phone on: "+$samAccountName) -source $EventLogSource -ToEventLog -ToOutput 
+            Write-YcLogMessage ("Successfully set Ip Phone on: "+$samAccountName) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
         }
         catch {
-            Write-YcLogMessage ("Could not set country-specific main phone number on AD User. Aborting. Error Details: "+$_.Exception.Message) Error -source $EventLogSource -ToEventLog -ToOutput 
+            Write-YcLogMessage ("Could not set country-specific main phone number on AD User. Aborting. Error Details: "+$_.Exception.Message) Error -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
             throw ("Could not set country-specific main phone number on AD User. Aborting. Error Details: "+$_.Exception.Message)
         }
     }
@@ -138,61 +183,102 @@ Function New-YcTeamsPhoneNumberAssignment {
         [Parameter(Mandatory=$true)] [string]$phoneNumber,
         [Parameter(Mandatory=$true)] [string]$firstname,
         [Parameter(Mandatory=$true)] [string]$lastname,
-        [Parameter(Mandatory=$false)][string]$PathToConfig = "C:\Temp\IdGov-NewAdUser-Config.json"
+        [Parameter(Mandatory=$false)][string]$PathToConfig = "$env:USERPROFILE\.yc\NewAdUser-Config.json",
+        [Parameter(Mandatory=$false)][string]$EventLogSource,
+        [Parameter(Mandatory=$false)][bool]$LogEnabled = $true
     )
 
     try {
-        Import-Module Yamautomate.Core
         $requiredModules = @("MicrosoftTeams")
         Get-YcRequiredModules -moduleNames $requiredModules -ErrorAction Stop
     }
     catch {
-        Write-Output (New-YcLogMessage -CustomText ("Could not import needed modules. Aborting. Error Details: "+$_.Exception.Message))
-        Log-Event -message (New-YcLogMessage -CustomText ("Could not import needed modules. Aborting. Error Details: "+$_.Exception.Message))
         throw ("Could not import needed modules. Aborting. Error Details: "+$_.Exception.Message)
     }
-    
-    Initialize-YcEventLogging -source "IdGov-New-AdUser-Workflow"
 
     try {
         $config = Get-Content -raw -Path $PathToConfig | ConvertFrom-Json -ErrorAction Stop
         $locationForLookup = "Location-"+$location
         $TopLevelDomain = $config.$locationForLookup.TopLevelDomain
-        $CertificateThumbprint = $config.Teams.CertificateThumbprint
-        $tenantId = $config.Teams.tenantId
-        $appId = $config.Teams.AzureAppRegistrationClientId
-        $rawDomainName = $config.ADSetup.rawDomainName
-        $policyname = $config.Teams.PolicyName 
+        $CertificateThumbprint = $config.TeamsPhone.CertificateThumbprint
+        $tenantId = $config.TeamsPhone.tenantId
+        $appId = $config.TeamsPhone.AzureAppRegistrationClientId
+        $rawDomainName = $config.ActiveDirectory.rawDomainName
+        $policyname = $config.TeamsPhone.PolicyName 
 
         $identity = $firstname+"."+$lastname+"@"+$rawDomainName+$TopLevelDomain 
 
-        Write-Output (New-YcLogMessage -CustomText ("Successfuly loaded config from path: "+$PathToConfig))
-        Log-Event -message (New-YcLogMessage -CustomText ("Successfuly loaded config from path: "+$PathToConfig))
+    }
+    catch {
+        throw ("Could not grab contents of ConfigFile. Aborting. Error Details: "+$_.Exception.Message)
     }
 
-    catch {
-        Write-Output (New-YcLogMessage -CustomText ("Could not grab contents of ConfigFile. Aborting. Error Details: "+$_.Exception.Message))
-        Log-Event -message (New-YcLogMessage -CustomText ("Could not grab contents of ConfigFile. Aborting. Error Details: "+$_.Exception.Message))
-        throw ("Could not grab contents of ConfigFile. Aborting. Error Details: "+$_.Exception.Message)
+    #Initialize Logging vars
+    [bool]$LogToEventLog = $false
+    [bool]$LogToLogFile = $false
+    [bool]$LogToOutput = $false
+    [bool]$LogToHost = $true
+
+
+    #Grab values from config if Log is enabled
+    If ($LogEnabled) 
+    {
+            $strLogToEventLog = $config.EventLogging.LogToEventlog
+            $strLogToLogFile = $config.EventLogging.LogToLogFile
+            $strLogToOutput = $config.EventLogging.LogToOutput
+            $strLogToHost = $config.EventLogging.LogToHost
+    
+            If ($strLogToEventLog -eq "true")
+            {
+                [bool]$LogToEventLog = $true
+            }
+    
+            if ($strLogToLogFile -eq "true")
+            {
+                [bool]$LogToLogFile = $true
+            }
+    
+            if ($strLogToOutput -eq "true")
+            {
+                [bool]$LogToOutput = $true
+            }
+    
+            if ($strLogToHost -eq "true")
+            {
+                [bool]$LogToHost = $true
+            }
+    }
+
+    #Make sure there is a Event Source we can post among
+    If (!($EventLogSource))
+    {
+        $EventLogSource = $config.EventLogging.NameOfEventSource
+        If (!($EventLogSource) -or $EventLogSource -eq " ")
+        {
+            $EventLogSource = "Yc.IAM-New-AdUser"
+        }
     }
 
     try {
         Connect-MicrosoftTeams -TenantId $tenantId -Certificate $CertificateThumbprint -ApplicationId $appId
+        Write-YcLogMessage ("Successfully connected to Teams Online using Certificate.") -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
     }
     catch {
-        Write-Output (New-YcLogMessage -CustomText ("Could not connect to Teams. Aborting. Error Details: "+$_.Exception.Message))
-        Log-Event -message (New-YcLogMessage -CustomText ("Could not connect to Teams.. Aborting. Error Details: "+$_.Exception.Message))
+        Write-YcLogMessage ("Could not connect to Teams. Aborting. Error Details: "+$_.Exception.Message) Error -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $false
         throw ("Could not connect to Teams. Aborting. Error Details: "+$_.Exception.Message)
     }
 
     try {
+        Write-YcLogMessage ("Trying to assign policy: "+$policyname+" to user: "+$identity) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
+
         Set-CsPhoneNumberAssignment -Identity $identity -PhoneNumber $phoneNumber -PhoneNumberType DirectRouting
         Grant-CsOnlineVoiceRoutingPolicy -Identity $identity -PolicyName $policyname 
         Grant-CsTeamsUpgradePolicy -Identity $identity -PolicyName UpgradeToTeams
+
+        Write-YcLogMessage ("Successfully assigned policy: "+$policyname+" to user: "+$identity) -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $LogToHost
     }
     catch {
-        Write-Output (New-YcLogMessage -CustomText ("Could not connect to assign phoneNumber. Aborting. Error Details: "+$_.Exception.Message))
-        Log-Event -message (New-YcLogMessage -CustomText ("Could not connect to assign phoneNumber.. Aborting. Error Details: "+$_.Exception.Message))
+        Write-YcLogMessage ("Could not connect to assign phoneNumber. Aborting. Error Details: "+$_.Exception.Message) Error -source $EventLogSource -ToEventLog $LogToEventLog -ToLogFile $LogToLogFile -ToOutput $LogToOutput -WriteHost $false
         throw ("Could not connect to assign phoneNumber. Aborting. Error Details: "+$_.Exception.Message)
     }
     finally {
@@ -250,6 +336,10 @@ class YcIAMConfigTemplate {
         return @{
             "EventLogging" = @(
                 @{
+                    "LogToEventlog" = "true"
+                    "LogToLogFile" = "true"
+                    "LogToOutput" = "true"
+                    "LogToHost" = "true"
                     "NameOfEventSource" = "YcIAM"
                     "PathToLogFile" = "C:\Temp\"
                 }
