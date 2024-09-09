@@ -542,14 +542,26 @@ function New-YcMgMailMessageBody {
     
 }
 function Get-YcCurrentUserType {
+ 
+    param (
+        [Parameter(Mandatory=$true, Position = 0)] [ValidateNotNullOrEmpty()] [switch]$LogOutput
+    )
+
     # Check if the current user is an administrator
     $isAdmin = (New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     if ($isAdmin) {
-        Write-Host "The current user has administrative privileges." -ForegroundColor Green
         $UserType = "Administrator"
+        if ($LogOutput)
+        {
+            Write-Host "The current user has administrative privileges." -ForegroundColor Green
+        }
+
     } else {
-        Write-Host "The current user does NOT have administrative privileges." -ForegroundColor Yellow
         $UserType = "User"
+        If ($LogOutput)
+        {
+            Write-Host "The current user does NOT have administrative privileges." -ForegroundColor Yellow
+        }
     }
     return $UserType
 }
