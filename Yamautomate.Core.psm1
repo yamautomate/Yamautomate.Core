@@ -40,10 +40,6 @@ function Get-YcRequiredModules {
             Throw $message
         }
 
-        else {
-            $message = "The required module '$module' is already installed. Trying to import it."
-        }
-
         # Check if the module is imported
         $moduleImported = Get-Module -Name $module
         if (-not $moduleImported) 
@@ -57,9 +53,6 @@ function Get-YcRequiredModules {
             catch {
                 Write-Error "Could not import module '$module' due to error: $_"
             }
-        }
-        else {
-            Write-Output "The required module '$module' is already imported. Doing nothing." -ForegroundColor Green
         }
     }
 }
@@ -100,7 +93,6 @@ function Initialize-YcEventLogging {
     {
         if (![System.Diagnostics.EventLog]::SourceExists($source)) {
             [System.Diagnostics.EventLog]::CreateEventSource($source, $logName)
-            Write-YcLogMessage "Yep" -ToOutput
         }
     }
     else {
@@ -336,10 +328,10 @@ function Write-YcLogMessage {
     [Parameter(Mandatory=$true, Position=0)] [ValidateNotNullOrEmpty()] [string]$message,
     [Parameter(Mandatory=$false, Position=1)] [ValidateNotNullOrEmpty()] [string]$source = "YcEventLog",
     [Parameter(Mandatory=$false, Position=2)] [ValidateSet("Information", "Warning", "Error")] [ValidateNotNullOrEmpty()] [string]$entryType = "Information",
-    [Parameter(Mandatory=$false, Position=3)] [ValidateNotNullOrEmpty()] [switch]$ToEventLog,
-    [Parameter(Mandatory=$false, Position=4)] [ValidateNotNullOrEmpty()] [switch]$ToLogFile,
-    [Parameter(Mandatory=$false, Position=5)] [ValidateNotNullOrEmpty()] [switch]$ToOutput,
-    [Parameter(Mandatory=$false, Position=6)] [ValidateNotNullOrEmpty()] [switch]$WriteHost,
+    [Parameter(Mandatory=$false, Position=3)] [ValidateNotNullOrEmpty()] [bool]$ToEventLog = $false,
+    [Parameter(Mandatory=$false, Position=4)] [ValidateNotNullOrEmpty()] [bool]$ToLogFile = $false,
+    [Parameter(Mandatory=$false, Position=5)] [ValidateNotNullOrEmpty()] [bool]$ToOutput = $false,
+    [Parameter(Mandatory=$false, Position=6)] [ValidateNotNullOrEmpty()] [bool]$WriteHost = $false,
     [Parameter(Mandatory=$false, Position=7)] [ValidateNotNullOrEmpty()] [string]$logDirectory = "$env:USERPROFILE\.yc"
     )
 
@@ -477,10 +469,7 @@ Function Send-YcMgEmail{
         [Parameter(Mandatory=$true, Position = 5)] [ValidateNotNullOrEmpty()] [string]$from,
         [Parameter(Mandatory=$true, Position = 6)] [ValidateNotNullOrEmpty()] [string]$to
     )
- 
-    $requiredModules = "Microsoft.Graph"
-    Get-YcRequiredModules $requiredModules
- 
+
     $messageBody = New-YcMgMailMessageBody -message $message -subject $subject -to $to 
  
     try {
@@ -847,9 +836,6 @@ function New-YcSecret {
       [Parameter(Mandatory=$false, Position = 4)] [string]$AzKeyVaultName,
       [Parameter(Mandatory=$false, Position = 5)] [ValidateSet("User", "System-Wide")] [string]$scope = "User"
   )
-
-  Get-YcRequiredModules -moduleName "CredentialManager"
-
   switch ($SecretLocation) {
       WindowsCredentialStore 
           {
@@ -965,9 +951,6 @@ function Get-YcSecret {
       [Parameter(Mandatory=$false, Position = 7)] [bool]$SupressErrors = $false
   )
 
-  $requiredModules = "CredentialManager"
-  Get-YcRequiredModules $requiredModules
-
   switch ($SecretLocation) {
       WindowsCredentialStore 
       { 
@@ -1074,12 +1057,10 @@ function Get-YcSecret {
       Default {}
   }
 }
-
 function New-YcGUID {
     $newGUID = [guid]::NewGuid()
     return $newGUID.guid
 }
- 
 function Get-YcJsonConfig {
     <#
 .SYNOPSIS
