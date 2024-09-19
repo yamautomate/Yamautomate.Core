@@ -36,7 +36,7 @@ function Get-YcRequiredModules {
         if (-not $moduleInstalled) 
         {
             $message = "The required module '$module' is not installed. Please install it."
-            Write-Output $message -ForegroundColor Yellow
+            Write-Host $message -ForegroundColor Yellow
             Throw $message
         }
 
@@ -44,10 +44,12 @@ function Get-YcRequiredModules {
         $moduleImported = Get-Module -Name $module
         if (-not $moduleImported) 
         {
-            Write-Output "The required module '$module' is not imported. Trying to import it." -ForegroundColor Yellow
+            Write-Host "The required module '$module' is not imported. Trying to import it..." -ForegroundColor Yellow
 
             try {
                 Import-Module -Name $module
+                Write-Host "Successfully imported module '$module'." -ForegroundColor Green
+
             } 
             
             catch {
@@ -1283,3 +1285,52 @@ class YcConfigTemplate {
 }
 
 
+function Authenticate-YcAAWebhookCall {
+    param (
+        $WebhookData
+    )
+
+    # Retrieve headers for authentication
+    $incomingAPIKey = $WebhookData.RequestHeader.'X-APIKey'
+    $incomingUserAgent = $WebhookData.RequestHeader.'User-Agent'
+    $incomingClientId = $WebhookData.RequestHeader.'X-ClientId'
+    $incomingTimestamp = $WebhookData.RequestHeader.'X-Timestamp'
+
+    # Validate User-Agent
+    $permittedUserAgents = (Get-AutomationVariable -Name "PermittedUserAgents").Split(",") | ForEach-Object { $_.Trim() }
+    if ($permittedUserAgents -notcontains $incomingUserAgent) {
+        throw "401: Unauthorized. Unknown User-Agent: $incomingUserAgent"
+    }
+
+    # Validate Timestamp (within 5 minutes to prevent replay attacks)
+    $requestTimestamp = [datetime]::Parse($incomingTimestamp)
+    $currentTime = Get-Date
+    if (($currentTime - $requestTimestamp).TotalMinutes -gt 5) {
+        throw "401: Unauthorized. Request expired. Request timestamp: $requestTimestamp"
+    }
+    
+    # Validate Client ID
+    $allowedClientIds = (Get-AutomationVariable -Name "AllowedClientIds").Split(",") | ForEach-Object { $_.Trim() }
+    if ($allowedClientIds -notcontains $incomingClientId) {
+        throw "401: Unauthorized. Invalid Client-ID: $incomingClientId"
+    }
+
+    # Validate API Key
+    $APIKeyStored = Get-AutomationVariable -Name "APIKey"
+    if ($incomingAPIKey -ne $APIKeyStored) {
+        throw "401: Unauthorized. Invalid API Key."
+    }
+
+    # If all validations pass
+    Write-YcLogMessage ("200: Successful authentication. User-Agent: $incomingUserAgent, Client-ID: $incomingClientId, Timestamp: $requestTimestamp") -ToOutput $true
+}
+
+function Validate-YcStrNotEmpty {
+    param(
+        [string]$Value,
+        [string]$PropertyName
+    )
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        throw "400: Bad Request. $PropertyName cannot be empty."
+    }
+}
