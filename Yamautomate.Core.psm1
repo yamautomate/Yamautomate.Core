@@ -1298,7 +1298,30 @@ function Authenticate-YcAAWebhookCall {
 
     # Validate User-Agent
     $permittedUserAgents = (Get-AutomationVariable -Name "PermittedUserAgents").Split(",") | ForEach-Object { $_.Trim() }
-    if ($permittedUserAgents -notcontains $incomingUserAgent) {
+    # Ensure incoming User-Agent is not null or empty
+    if ([string]::IsNullOrWhiteSpace($incomingUserAgent)) {
+        throw "401: Unauthorized. Missing User-Agent."
+    }
+
+    # Convert incoming User-Agent to lowercase for case-insensitive comparison
+    $incomingUserAgentLower = $incomingUserAgent.ToLower()
+
+    # Initialize a flag to track if a match is found
+    $matchFound = $false
+
+    # Loop through the list of permitted User Agents to check for a match
+    foreach ($permittedUserAgent in $permittedUserAgents) {
+        $permittedUserAgentLower = $permittedUserAgent.ToLower()
+
+        # Check if the incoming User-Agent starts with or contains the allowed agent
+        if ($incomingUserAgentLower -like "*$permittedUserAgentLower*") {
+            $matchFound = $true
+            break
+        }
+    }
+
+    # If no match was found, throw an unauthorized error
+    if (-not $matchFound) {
         throw "401: Unauthorized. Unknown User-Agent: $incomingUserAgent"
     }
 
@@ -1334,3 +1357,5 @@ function Validate-YcStrNotEmpty {
         throw "400: Bad Request. $PropertyName cannot be empty."
     }
 }
+
+
